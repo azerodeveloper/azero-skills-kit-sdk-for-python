@@ -1,8 +1,3 @@
-<div align="right">
-<img src="./soundai.png" height = "30" alt="SoundAI" align=middle />
-</div>
-
-[TOC]
 
 # 本地 python 技能调试环境搭建说明
 
@@ -66,8 +61,8 @@ pip 18.1 from /opt/python3.6/lib/python3.6/site-packages/pip (python 3.6)
 ### 安装项目根目录下lib中的所有安装包(在lib目录下执行pip install xxx.tar.gz)，例如:
 
 ```python
-pip install azero-sdk-2.0.0.tar.gz
-pip install azero-sdk-util-0.0.2.tar.gz
+pip install azero-sdk-2.0.2.tar.gz
+pip install azero-sdk-util-1.0.2.tar.gz
 ```
 
 ### 安装必要库：
@@ -138,6 +133,13 @@ INFO:werkzeug: * Running on http://0.0.0.0:9930/ (Press CTRL+C to quit)
 	}
 }
 ```
+##### 使用curl测试
+保持python SDK运行，使用curl方法
+*注：skill/sample与index.py所在路径保持一致*
+```
+curl -H "Content-Type:application/json" -X POST -d '{"version":"1.0","session":{"new":true,"sessionId":"token.domain-api.session.5e3c1a35d8dafe00060beec8","application":{"applicationId":"5e37d715a521820008e9a3f0"},"user":{"userId":"anonymous_2b861255e642461f9d89ad332da6e370"},"attributes":{"source_skill_mapping":{},"smarthome_skill_mapping":{},"ip":"114.220.24.57"}},"context":{"System":{"application":{"applicationId":"5e37d715a521820008e9a3f0"},"user":{"userId":"anonymous_2b861255e642461f9d89ad332da6e370"},"device":{"deviceId":"52e877f4956ba650dadb3185a3b54746","supportedInterfaces":{"AudioPlayer":{},"Display":{}}}}},"request":{"type":"IntentRequest","requestId":"e4308cca-6e8f-488b-a365-da70453972cf","timestamp":"2020-02-14T00:52:53.541Z","dialogState":"COMPLETED","intent":{}}}' \
+"http://0.0.0.0:9930/skill/sample"
+```
 得到的返回如下，代表本地python技能调试环境搭建完成。
 ```
 {
@@ -178,19 +180,6 @@ INFO:werkzeug: * Running on http://0.0.0.0:9930/ (Press CTRL+C to quit)
 
 支持以下功能：
 
-**技能日志**
-​
-使用样例：
-
-```python
-from azero_log.azero_logger import logger
-....
-# 第二个参数必传
-logger.debug("log message", request_envelope=handler_input.request_envelope)
-logger.info("log message", request_envelope=handler_input.request_envelope)
-logger.warn("log message", request_envelope=handler_input.request_envelope)
-logger.error("log message", request_envelope=handler_input.request_envelope)
-```
 
 ​**ip解析城市**
 
@@ -204,8 +193,49 @@ city = ipdb_city.find_info("114.220.24.57", "CN").city_name
 
 
 ## Template展现模版 
-* 为了更好的在有屏设备端上展现技能，AZERO提供了多种展现模板供开发者使用。展现模板分body template和list template两种类型。其中body template由图片和文字组成，list template由一系列list item组成，每个list item由图片和文字组成。不同的展现模板适合不同的场景，开发者可以根据技能展现的需求选择合适的模板
-* 添加返回端上的模版方法包含addRenderTemplateDirective
+* 为了更好的在有屏设备端上展现技能，AZERO提供了多种展现模板供开发者使用。展现模板分body template、list template、default template data三种类型。其中body template由图片和文字组成，list template由一系列list item组成，每个list item由图片和文字组成。default template date适用于需要携带额外信息给设备端。不同的展现模板适合不同的场景，开发者可以根据技能展现的需求选择合适的模板
+* 添加返回端上的模版方法使用到addRenderTemplateDirective方法，示例代码如下:
+
+~~~
+"""以模板DefaultTemplateData为例"""
+
+"""DefaultTemplateData的依赖 开始"""
+from azero_sdk_model.interfaces.display.image_instance import ImageInstance
+from azero_sdk_model.interfaces.display.image import Image
+
+from azero_sdk_model.interfaces.display.default_template_data import DefaultTemplateData
+from azero_sdk_model.interfaces.display.ext_content import ExtContent
+from azero_sdk_model.interfaces.display.title import Title
+"""DefaultTemplateData的依赖 结束"""
+
+class CompletedDelegateHandler_test_test(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return (ask_utils.is_request_type("IntentRequest")(handler_input) and
+               ask_utils.is_intent_name("test_test")(handler_input) and
+               ask_utils.get_dialog_state(handler_input).value == 'COMPLETED')
+    def handle(self, handler_input):
+        currentIntent = handler_input.request_envelope.request.intent
+        speakOutput = '你好，我是小易'
+        return (
+        """编辑DefaultTemplateData模板开始处"""
+        	handler_input.response_builder.add_directive(
+                RenderTemplateDirective(
+                    DefaultTemplateData(
+                        token="token",
+                        back_button="backButton",
+                        background_image=Image(sources=[ImageInstance(url="http://ssds.background_image_sources.com")]),
+                        title=Title(mainTitle="mainTitle", subTitle="subTitle"),
+                        ext_content=ExtContent(data="data", type="type", tts_text="TTSText", asr_text="ASRText"),
+                        text_field="textField"
+                    )
+                ))
+       """编辑DefaultTemplateData模板结束处"""
+        		.speak(speakOutput)
+        		.set_should_end_session(True)
+        		.response
+        )
+~~~
+
 
 
 ### BodyTemplate 共有5种类型模板可供选择
@@ -407,6 +437,40 @@ city = ipdb_city.find_info("114.220.24.57", "CN").city_name
 }
 ```
 
+#### DefaultTemplateData
+* 包含以下内容：
+  * token:模板的唯一标识
+  * backButton:开发者在技能发布时需进行上传(可选)，返回按钮(展示/隐藏)
+  * backgroundImage:技能交互时作为背景展示的图片（可选）
+  * title:技能名称或者技能当前页面主题
+    * mainTitle:主题
+    * subTitle:子主题
+  * extContent:
+    * data:自定义数据，可以是一段json转为String，然后端上重新解析为Json，自定义操作内容
+    * type:领域
+    * TTSText:tts文本内容
+    * ASRText:ASR结果
+
+
+```python
+{
+    "type":"DefaultTemplateData",
+    "token": "string",
+    "backButton": "VISIBLE"(default) | "HIDDEN",
+    "backgroundImage":Image,
+    "title":{
+        "mainTitle":"string",
+        "subTitle":"string"
+    },
+    "extContent":{
+        "data":"string",
+        "type":"string",
+        "TTSText":"string",
+        "ASRText":"string"
+    },
+    "textField":"string"
+}
+```
 ### Q&A
 ##### Q:环境中自带了python，发生冲突怎么办？
 A: 解决此问题有两种方式。
