@@ -9,6 +9,9 @@ from flask import request
 ENCODING = "utf-8"
 DATETIMEFORMAT="%Y-%m-%dT%H:%M:%SZ"
 
+# os.environ['DBURL'] = 'mongodb://user_name:password@127.0.0.1:27017'
+# os.environ['DATABASES'] = 'azero_skill'
+
 app=Flask(__name__)
 #接口基本调试
 @app.route('/', methods=['GET', 'POST'])
@@ -38,4 +41,4 @@ def home(name):
 
 if __name__ == '__main__':
     logging.info("启动成功")
-    app.run(host='0.0.0.0', port='9930',debug=False, threaded=True)
+    app.run(host='127.0.0.1', port='5000',debug=False, threaded=True)

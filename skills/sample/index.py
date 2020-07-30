@@ -5,13 +5,23 @@ from azero_sdk_model.interfaces.display import (
 from azero_sdk_model.dialog import *
 from azero_sdk_core.skill_builder import SkillBuilder
 from azero_sdk_core.dispatch_components import AbstractRequestHandler
-import azero_sdk_core.utils as ask_utils
+import azero_sdk_core.utils as azero_utils
 from azero_sdk_core.handler_input import HandlerInput
 from azero_sdk_model import Response
 from azero_sdk.skill_adapter import AzeroSkillAdapter
 
-sb = SkillBuilder()
+from azero_log.azero_logger import logger
+from azero_sdk_mongodb.adapter import MongoDbPersistenceAdapter
+from azero_ipdb.ipdb_util import ipdb_city
 
+import datetime
+try:
+    import mock
+except ImportError:
+    from unittest import mock
+
+partition_keygen = mock.Mock()
+sb = SkillBuilder()
 
 """
 Azero系统根据您自定义意图的意图标识自动生成此函数。
@@ -22,9 +32,9 @@ handle:当can_handle返回为true时,自动执行。开发者需在handle内部�
 """
 class CompletedDelegateHandler_hello(AbstractRequestHandler):
     def can_handle(self, handler_input):
-        return (ask_utils.is_request_type("IntentRequest")(handler_input) and
-               ask_utils.is_intent_name("test")(handler_input) and
-               ask_utils.get_dialog_state(handler_input).value == 'COMPLETED')
+        return (azero_utils.is_request_type("IntentRequest")(handler_input) and
+               azero_utils.is_intent_name("test")(handler_input) and
+               azero_utils.get_dialog_state(handler_input).value == 'COMPLETED')
     def handle(self, handler_input):
         currentIntent = handler_input.request_envelope.request.intent
         speakOutput = '欢迎使用技能,您可根据当前意图和槽位返回您想回复的话术'
@@ -47,10 +57,10 @@ handle:当can_handle返回为true时,自动执行。由于意图禁用了自动�
 """
 class CombineDialogDelegateHandler_hello(AbstractRequestHandler):
     def can_handle(self, handler_input):
-        return (ask_utils.is_request_type("IntentRequest")(handler_input) and
-               ask_utils.is_intent_name("test")(handler_input) and
-               (ask_utils.get_dialog_state(handler_input).value == 'STARTED' or
-               ask_utils.get_dialog_state(handler_input).value == 'IN_PROGRESS'))
+        return (azero_utils.is_request_type("IntentRequest")(handler_input) and
+               azero_utils.is_intent_name("test")(handler_input) and
+               (azero_utils.get_dialog_state(handler_input).value == 'STARTED' or
+               azero_utils.get_dialog_state(handler_input).value == 'IN_PROGRESS'))
     def handle(self, handler_input):
         currentIntent = handler_input.request_envelope.request.intent
         speakOutput = '您可根据判断意图或者所有槽位返回您想回复的话术和模版'
@@ -75,7 +85,7 @@ class SessionEndedRequestHandler(AbstractRequestHandler):
 
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
-        return ask_utils.is_request_type("SessionEndedRequest")(handler_input)
+        return azero_utils.is_request_type("SessionEndedRequest")(handler_input)
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
@@ -87,9 +97,31 @@ class SessionEndedRequestHandler(AbstractRequestHandler):
 class IntentRequestHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
-        return ask_utils.is_request_type("IntentRequest")(handler_input)
+        return azero_utils.is_request_type("IntentRequest")(handler_input)
 
     def handle(self, handler_input):
+        city = ipdb_city.find_info("114.220.24.57", "CN").city_name
+        logger.info("当前IP对应的城市是：" + city, request_envelope=handler_input.request_envelope)
+
+        request_envelope = handler_input.request_envelope
+        partition_keygen.return_value = request_envelope.context.system.user.user_id
+        mongodb_adapter = MongoDbPersistenceAdapter(
+            request_envelope=request_envelope,
+            table_name="table_name",  # 要创建的表名
+            attribute_name="obj",  # 查询对象，不写默认为attributes
+            partition_key_name="sss",  # 查询关键字 不写默认为id
+            partition_keygen=partition_keygen
+        )
+
+        # 删除数据
+        mongodb_adapter.delete_attributes(request_envelope=request_envelope)
+        data = {"mongo_adapter": {"test": datetime.datetime.now()}}
+        # 添加数据
+        mongodb_adapter.save_attributes(request_envelope=request_envelope, attributes=data)
+        # 查询数据
+        response = mongodb_adapter.get_attributes(request_envelope=request_envelope)
+        for result in response:
+            print(result)
         speak_output='欢迎使用技能'
         return (
             handler_input.response_builder.add_directive(
@@ -101,6 +133,7 @@ class IntentRequestHandler(AbstractRequestHandler):
                 .set_should_end_session(True)
                 .response
         )
+
 """
 所有意图函数都需要添加到add_request_handler中。保证Azero系统能正常将用户的意图请求传入
 对应的意图函数中进行处理。服务部署一般会自动生成添加代码。

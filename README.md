@@ -1,3 +1,6 @@
+<div align="right">
+<img src="./soundai.png" height = "30" alt="SoundAI" align=middle />
+</div>
 
 # 本地 python 技能调试环境搭建说明
 
@@ -62,7 +65,8 @@ pip 18.1 from /opt/python3.6/lib/python3.6/site-packages/pip (python 3.6)
 
 ```python
 pip install azero-sdk-2.0.2.tar.gz
-pip install azero-sdk-util-1.0.2.tar.gz
+pip install azero-sdk-util-1.0.3.tar.gz
+pip install azero-sdk-mongodb-persistence-adapter-1.0.1.tar.gz
 ```
 
 ### 安装必要库：
@@ -82,13 +86,14 @@ $ python app.py
    WARNING: This is a development server. Do not use it in a production deployment.
    Use a production WSGI server instead.
  * Debug mode: off
-INFO:werkzeug: * Running on http://0.0.0.0:9930/ (Press CTRL+C to quit)
+INFO:werkzeug: * Running on http://127.0.0.1:5000/ (Press CTRL+C to quit)
 
 ```
 若得到同样输出，或使用浏览器访问所提示的网址，看到“启动成功”字样，则代表运行成功。
 ##### 使用postman测试
-保持python SDK运行，使用postman使用POST方法发送如下json串到地址http://0.0.0.0:9930/skill/sample
+保持python SDK运行，使用postman使用POST方法发送如下json串到地址http://127.0.0.1:5000/skill/sample
 *注：skill/sample与index.py所在路径保持一致*
+
 ```
 {
 	"version": "1.0",
@@ -138,7 +143,7 @@ INFO:werkzeug: * Running on http://0.0.0.0:9930/ (Press CTRL+C to quit)
 *注：skill/sample与index.py所在路径保持一致*
 ```
 curl -H "Content-Type:application/json" -X POST -d '{"version":"1.0","session":{"new":true,"sessionId":"token.domain-api.session.5e3c1a35d8dafe00060beec8","application":{"applicationId":"5e37d715a521820008e9a3f0"},"user":{"userId":"anonymous_2b861255e642461f9d89ad332da6e370"},"attributes":{"source_skill_mapping":{},"smarthome_skill_mapping":{},"ip":"114.220.24.57"}},"context":{"System":{"application":{"applicationId":"5e37d715a521820008e9a3f0"},"user":{"userId":"anonymous_2b861255e642461f9d89ad332da6e370"},"device":{"deviceId":"52e877f4956ba650dadb3185a3b54746","supportedInterfaces":{"AudioPlayer":{},"Display":{}}}}},"request":{"type":"IntentRequest","requestId":"e4308cca-6e8f-488b-a365-da70453972cf","timestamp":"2020-02-14T00:52:53.541Z","dialogState":"COMPLETED","intent":{}}}' \
-"http://0.0.0.0:9930/skill/sample"
+"http://127.0.0.1:5000/skill/sample"
 ```
 得到的返回如下，代表本地python技能调试环境搭建完成。
 ```
@@ -180,17 +185,86 @@ curl -H "Content-Type:application/json" -X POST -d '{"version":"1.0","session":{
 
 支持以下功能：
 
+​	**技能日志**
 
-​**ip解析城市**
+​	使用样例：
 
-​使用样例：
+```python
+from azero_log.azero_logger import logger
+....
+# 第二个参数必传
+logger.debug("log message", request_envelope=handler_input.request_envelope)
+logger.info("log message", request_envelope=handler_input.request_envelope)
+logger.warn("log message", request_envelope=handler_input.request_envelope)
+logger.error("log message", request_envelope=handler_input.request_envelope)
+```
+
+​	**ip解析城市**
+
+​	使用样例：
 
 ```js
 from azero_ipdb.ipdb_util import ipdb_city
 ...
 city = ipdb_city.find_info("114.220.24.57", "CN").city_name
+
+# 备注：局域网内网IP是查询不了的
+```
+#### azero-sdk-mongodb-persistence-adapter-*.tar.gz mongodb工具
+
+​	用法如下：
+
+​		项目根目录/lib安装
+
+​		pip install azero-sdk-mongodb-persistence-adapter-*.tar.gz
+
+​		数据库设置：
+
+```python
+#持久化配置
+os.environ['DBURL'] = 'mongodb://user_name:password@127.0.0.1:27017'
+os.environ['DATABASES'] = 'azero_skill'
+
+# 或者 环境变量里设置
+# DBURL = mongodb://user_name:password@127.0.0.1:27017
+# DATABASES = azero_skill
 ```
 
+​	使用样例：
+
+```python
+# 引入BD持久化包
+from azero_sdk_mongodb.adapter import MongoDbPersistenceAdapter
+try:
+    import mock
+except ImportError:
+    from unittest import mock
+...
+
+# 初始化mongodb_adapter
+partition_keygen = mock.Mock()
+request_envelope = handler_input.request_envelope
+partition_keygen.return_value = request_envelope.context.system.user.user_id
+test_mongodb_adapter = MongoDbPersistenceAdapter(
+    request_envelope=request_envelope,
+    table_name="table_name", #要创建的表名
+    attribute_name="attributes",#查询对象，不写默认为attributes
+    partition_key_name="user_id",#查询关键字 不写默认为id
+    partition_keygen=partition_keygen
+)
+
+data = {"mongo_adapter":{"test":"test1"}}
+# 添加数据
+test_mongodb_adapter.save_attributes(request_envelope=request_envelope, attributes=data)
+
+# 查询数据
+response = test_mongodb_adapter.get_attributes(request_envelope=request_envelope)
+for result in response:
+    print(result)
+
+# 删除数据
+test_mongodb_adapter.delete_attributes(request_envelope=request_envelope)
+```
 
 ## Template展现模版 
 * 为了更好的在有屏设备端上展现技能，AZERO提供了多种展现模板供开发者使用。展现模板分body template、list template、default template data三种类型。其中body template由图片和文字组成，list template由一系列list item组成，每个list item由图片和文字组成。default template date适用于需要携带额外信息给设备端。不同的展现模板适合不同的场景，开发者可以根据技能展现的需求选择合适的模板
