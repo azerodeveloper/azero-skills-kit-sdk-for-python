@@ -41,4 +41,4 @@ six==1.13.0
 soupsieve==1.9.5
 typing-extensions==3.7.4.1
 urllib3==1.25.7
-Werkzeug==0.16.0
+Werkzeug==2.2.3
